@@ -1,0 +1,203 @@
+{% load extras %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Bus Booking Portal</title>
+
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+
+    <style>
+        body {
+            background: linear-gradient(135deg, #00b4d8, #0077b6);
+            min-height: 100vh;
+            color: #fff;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        .booking-card {
+            background: linear-gradient(135deg, #023e8a, #0096c7);
+            padding: 30px;
+            border-radius: 20px;
+            box-shadow: 0px 6px 20px rgba(0,0,0,0.3);
+            max-width: 700px;
+            margin: 50px auto;
+        }
+
+        h1 {
+            color: #FFD700;
+            text-align: center;
+            margin-bottom: 25px;
+        }
+
+        label {
+            font-weight: bold;
+        }
+
+        select, input {
+            margin-bottom: 20px;
+        }
+
+        .btn-book {
+            background: linear-gradient(45deg, #00b159, #007f5f);
+            color: #fff;
+            font-weight: bold;
+            padding: 10px 25px;
+            border-radius: 12px;
+            border: none;
+        }
+
+        .btn-book:hover {
+            background: linear-gradient(45deg, #007f5f, #00b159);
+        }
+
+        .error {
+            color: #ff6961;
+            font-weight: bold;
+            margin-bottom: 15px;
+        }
+
+        .success {
+            color: #90ee90;
+            font-weight: bold;
+            margin-bottom: 15px;
+        }
+
+        .ticket-buttons {
+            margin-bottom: 20px;
+        }
+
+        .ticket-buttons a, .ticket-buttons button {
+            margin-right: 10px;
+        }
+
+        .filter-container {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 20px;
+        }
+
+        .filter-container label {
+            margin-right: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="booking-card">
+        <!-- Header -->
+        <h1><i class="fa-solid fa-bus"></i> Bus Booking Portal</h1>
+
+        <!-- Success & Error Messages -->
+        {% if booking.error %}
+            <div class="error">{{ booking.error }}</div>
+        {% elif booking.object %}
+            <div class="success">
+                Booking Successful! Ticket No: {{ booking.ticket_number }}
+            </div>
+        {% endif %}
+
+        <!-- Ticket Buttons (always visible) -->
+        <div class="ticket-buttons">
+            {% if booking.object %}
+                <!-- Active buttons after booking -->
+                <a href="{% url 'download_ticket_pdf' booking.object.id %}" class="btn btn-sm btn-light">
+                    <i class="fa-solid fa-download"></i> Download PDF
+                </a>
+                <a href="{% url 'ticket_preview' booking.object.id %}" target="_blank" class="btn btn-sm btn-primary">
+                    <i class="fa-solid fa-eye"></i> Preview Ticket
+                </a>
+            {% else %}
+                <!-- Disabled buttons before booking -->
+                <button class="btn btn-sm btn-light" disabled>
+                    <i class="fa-solid fa-download"></i> Download PDF
+                </button>
+                <button class="btn btn-sm btn-primary" disabled>
+                    <i class="fa-solid fa-eye"></i> Preview Ticket
+                </button>
+            {% endif %}
+        </div>
+
+        <!-- AC/Non-AC Filter -->
+        <div class="filter-container">
+            <div>
+                <label for="bus_type_filter">Filter by Bus Type:</label>
+                <select id="bus_type_filter" class="form-select">
+                    <option value="all">All Types</option>
+                    <option value="AC">AC 🧊</option>
+                    <option value="Non-AC">Non-AC 🔥</option>
+                </select>
+            </div>
+        </div>
+
+        <!-- Booking Form -->
+        <form method="post">
+            {% csrf_token %}
+            <div class="mb-3">
+                <label for="name">Passenger Name</label>
+                <input type="text" name="name" id="name" class="form-control" placeholder="Enter your name" required>
+            </div>
+
+            <div class="mb-3">
+                <label for="route">Select Route</label>
+                <select name="route" id="route" class="form-select" required>
+                    <option value="">-- Select Route --</option>
+                    {% for route in routes %}
+                        <option value="{{ route.id }}" data-bus-type="{{ route.bus_type }}">
+                            {{ route.name }} - ₹{{ route.adult_fare }} ({{ route.bus_type }}) 🚌 -
+                            Seats: {{ available_seats_per_route|get_item:route.id }}
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="mb-3">
+                <label for="adults">Adults</label>
+                <input type="number" name="adults" id="adults" class="form-control" min="0" value="1" required>
+            </div>
+
+            <div class="mb-3">
+                <label for="children">Children</label>
+                <input type="number" name="children" id="children" class="form-control" min="0" value="0" required>
+            </div>
+
+            <div class="mb-3">
+                <label for="email_to">Email (optional)</label>
+                <input type="email" name="email_to" id="email_to" class="form-control" placeholder="Enter your email">
+            </div>
+
+            <button type="submit" class="btn-book">
+                <i class="fa-solid fa-ticket"></i> Book Ticket
+            </button>
+        </form>
+    </div>
+
+    <!-- JavaScript for Bus Type Filter -->
+    <script>
+        const filterSelect = document.getElementById('bus_type_filter');
+        const routeSelect = document.getElementById('route');
+        const allOptions = Array.from(routeSelect.options);
+
+        filterSelect.addEventListener('change', function() {
+            const selectedType = this.value;
+            routeSelect.innerHTML = '';
+
+            const defaultOption = allOptions.find(o => o.value === "");
+            routeSelect.appendChild(defaultOption.cloneNode(true));
+
+            allOptions.forEach(option => {
+                const busType = option.dataset.busType;
+                if (selectedType === 'all' || busType === selectedType) {
+                    routeSelect.appendChild(option.cloneNode(true));
+                }
+            });
+        });
+    </script>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
